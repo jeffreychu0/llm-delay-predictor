@@ -4,6 +4,7 @@ import concurrent.futures
 
 
 def main():
+    init_db()
     print("Database initialized successfully.")
 
     #parallel execuation of the feed processing function to speed up the data collection process
