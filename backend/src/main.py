@@ -1,4 +1,4 @@
-import db.init_db
+from db.init_db import init_db
 import api.mta_api
 import concurrent.futures
 
