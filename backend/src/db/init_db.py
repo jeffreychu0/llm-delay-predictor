@@ -11,7 +11,7 @@ def init_db():
     train_observations: Stores real-time observations of train arrivals, including actual arrival times
     external_factors: Stores information about external factors that may influence train delays, such as weather conditions, special events, and holidays. This data can be collected from various sources, including weather APIs and event calendars.
     """
-    cursor.execute('''
+    cursor.executescript('''
         CREATE TABLE IF NOT EXISTS trip_statistics (
             trip_id TEXT PRIMARY KEY,
             route_id text,
@@ -20,6 +20,7 @@ def init_db():
             stop_id TEXT,
             day_type TEXT
         );
+                   
         CREATE TABLE IF NOT EXISTS train_observations (   
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             trip_id TEXT,
