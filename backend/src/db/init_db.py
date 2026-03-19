@@ -1,8 +1,11 @@
 import sqlite3
 import datetime
+import os
 
+file = os.path.abspath(__file__)
+DB_PATH = os.path.dirname(file) 
 def init_db():
-    conn = sqlite3.connect('mta.db')
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
     cursor = conn.cursor()
     
 

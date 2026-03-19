@@ -1,11 +1,15 @@
-from db.init_db import init_db
+from sqlite3 import Time
+
+from db.init_db import DB_PATH, init_db
 import api.mta_api
 import concurrent.futures
-
+import time
+import os
 
 def main():
     init_db()
-    print("Database initialized successfully.")
+    time.sleep(2) #wait for the database to be initialized before starting to process the feeds
+    print({DB_PATH})
 
     #parallel execuation of the feed processing function to speed up the data collection process
     with concurrent.futures.ThreadPoolExecutor() as executor:
