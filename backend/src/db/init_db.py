@@ -26,7 +26,7 @@ def init_db():
             trip_id TEXT,
             route_id TEXT,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            actutal_arrival_time DATETIME,
+            actual_arrival_time DATETIME,
             delay_seconds INTEGER,
             stop_id TEXT,
             FOREIGN KEY (trip_id) REFERENCES trip_statistics(trip_id)
@@ -36,7 +36,7 @@ def init_db():
             timestamp DATETIME PRIMARY KEY,
             weather_condition TEXT,
             temp_f TEXT,
-            mta_event TEXT
+            mta_event TEXT,
             is_holiday BOOLEAN DEFAULT FALSE
         );
     ''')    

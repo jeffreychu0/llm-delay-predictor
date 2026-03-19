@@ -34,7 +34,7 @@ def proccess_feed(feed_url):
                         stop_id = stop_time_update.stop_id
         
                         cursor.execute('''
-                            INSERT OR IGNORE INTO train_observations (trip_id, route_id, timestamp, actutal_arrival_time, delay_seconds, stop_id)
+                            INSERT OR IGNORE INTO train_observations (trip_id, route_id, timestamp, actual_arrival_time, delay_seconds, stop_id)
                             VALUES (?, ?, datetime('unixepoch', ?), datetime('unixepoch', ?), ?, ?)
                         ''', (trip_update.trip.trip_id, route_id, stop_time_update.arrival.time, schedule_time,  stop_time_update.arrival.delay, stop_id))
                 
