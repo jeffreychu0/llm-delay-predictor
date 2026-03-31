@@ -3,6 +3,7 @@ import datetime
 import os
 
 file = os.path.abspath(__file__)
+# static var to ensure when connecting to the db the path is correct regardless of where the script is being run from, this is important for the feed processing function which is being executed in a different thread and may have a different working directory
 DB_PATH = os.path.dirname(file) 
 def init_db():
     conn = sqlite3.connect(DB_PATH + '/mta.db')

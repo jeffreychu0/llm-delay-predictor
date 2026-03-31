@@ -14,6 +14,23 @@ feeds = [
     "nyct%2Fgtfs-nqrw", "nyct%2Fgtfs-jz"
 ]
 
+def row_exists(primary_key_value):
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM train_observations WHERE id = ?", (primary_key_value,))
+    exists = cursor.fetchone() is not None
+    conn.close()
+    return exists
+
+def update_row(primary_key_value, new_values, table_name):
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    set_clause = ", ".join([f"{column} = ?" for column in new_values.keys()])
+    values = list(new_values.values()) + [primary_key_value]
+    cursor.execute(f"UPDATE {table_name} SET {set_clause} WHERE id = ?", values)
+    conn.commit()
+    conn.close()
+    
 def proccess_feed(feed_url):
     try:
         feed = gtfs_realtime_pb2.FeedMessage()
