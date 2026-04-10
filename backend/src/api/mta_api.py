@@ -46,13 +46,16 @@ def proccess_feed(feed_url):
                 route_id = trip_update.trip.route_id
                 for stop_time_update in trip_update.stop_time_update:
                     if stop_time_update.HasField('arrival'):
-                        schedule_time = stop_time_update.arrival.time - stop_time_update.arrival.delay
+                        arrival = stop_time_update.arrival
+                        delay = arrival.delay 
+                        atual_time = arrival.time
+                        schedule_time = atual_time - delay
                         stop_id = stop_time_update.stop_id
         
                         cursor.execute('''
                             INSERT OR IGNORE INTO train_observations (trip_id, route_id, timestamp, actual_arrival_time, delay_seconds, stop_id)
-                            VALUES (?, ?, datetime('unixepoch', ?), datetime('unixepoch', ?), ?, ?)
-                        ''', (trip_update.trip.trip_id, route_id, stop_time_update.arrival.time, schedule_time,  stop_time_update.arrival.delay, stop_id))
+                            VALUES (?, ?, datetime( ?, 'unixepoch'), datetime( ?, 'unixepoch'), ?, ?)
+                        ''', (trip_update.trip.trip_id, route_id, atual_time, schedule_time,  delay, stop_id))
                 
         connect.commit()
         connect.close()
