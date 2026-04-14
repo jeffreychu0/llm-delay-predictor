@@ -16,7 +16,9 @@ def main():
     
     with concurrent.futures.ThreadPoolExecutor() as executor:
         while True:
-            executor.submit(api.mta_api.proccess_feed, f"{api.mta_api.base_url}{api.mta_api.feeds[0]}")
+            for feed in api.mta_api.feeds:
+
+                executor.submit(api.mta_api.proccess_feed, f"{api.mta_api.base_url}{feed}")
             time.sleep(30) #wait for 30 seconds before processing the feeds again to avoid overwhelming the MTA API with requests
         
 
