@@ -10,7 +10,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 base_url = "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/"
 feeds = [
     "nyct%2Fgtfs", "nyct%2Fgtfs-ace", "nyct%2Fgtfs-bdfm", 
-    "nyct%2Fgtfs-g", "nyct%2Fgtfs-l", "nyct%2Fgtfs-7", 
+    "nyct%2Fgtfs-g", "nyct%2Fgtfs-l", "nyct%2Fgtfs-si", 
     "nyct%2Fgtfs-nqrw", "nyct%2Fgtfs-jz"
 ]
 
@@ -48,14 +48,14 @@ def process_feed(feed_url):
                     if stop_time_update.HasField('arrival'):
                         arrival = stop_time_update.arrival
                         delay = arrival.delay 
-                        atual_time = arrival.time
-                        schedule_time = atual_time - delay
+                        actual_time = arrival.time
+                        schedule_time = actual_time - delay
                         stop_id = stop_time_update.stop_id
         
                         cursor.execute('''
                             INSERT OR IGNORE INTO train_observations (trip_id, route_id, timestamp, actual_arrival_time, delay_seconds, stop_id)
                             VALUES (?, ?, datetime( ?, 'unixepoch'), datetime( ?, 'unixepoch'), ?, ?)
-                        ''', (trip_update.trip.trip_id, route_id, atual_time, schedule_time,  delay, stop_id))
+                        ''', (trip_update.trip.trip_id, route_id, actual_time, schedule_time,  delay, stop_id))
                 
         connect.commit()
         connect.close()
