@@ -54,15 +54,7 @@ def proccess_feed(feed_url):
                         schedule_time = atual_time - delay
                         stop_id = stop_time_update.stop_id
         
-                        cursor.execute('''
-                            INSERT OR IGNORE INTO train_observations (trip_id, route_id, timestamp, actual_arrival_time, delay_seconds, stop_id)
-                            VALUES (?, ?, datetime( ?, 'unixepoch'), datetime( ?, 'unixepoch'), ?, ?)
-                        ''', (trip_id, 
-                              route_id, 
-                              feed.header.timestamp, 
-                              atual_time, 
-                              delay, 
-                              stop_id))
+                        
                 
         connect.commit()
         connect.close()

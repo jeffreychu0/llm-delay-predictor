@@ -80,3 +80,66 @@ def init_db():
     
     conn.commit()
     conn.close()
+
+
+def inert_route_stop(route_id, stop_id, direction_id, stop_sequence):
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT OR IGNORE INTO route_to_stop (route_id, stop_id, direction_id, stop_sequence)
+        VALUES (?, ?, ?, ?)
+    ''', (route_id, stop_id, direction_id, stop_sequence))
+    conn.commit()
+    conn.close(
+    )
+
+def insert_stop(stop_id, stop_name, borough, latitude, longitude):
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT OR IGNORE INTO stops (stop_id, stop_name, borough, latitude, longitude)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (stop_id, stop_name, borough, latitude, longitude))
+    conn.commit()
+    conn.close()
+
+def insert_mta_event(event_id, event_name, event_type, event_description, is_planned):
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT OR IGNORE INTO mta_event_lookup (event_id, event_name, event_type, event_description, is_planned)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (event_id, event_name, event_type, event_description, is_planned))
+    conn.commit()
+    conn.close()
+
+def insert_trip_statistic(trip_id, route_id, direction_id, start_time, start_date, stop_id, day_type):
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT OR IGNORE INTO trip_statistics (trip_id, route_id, direction_id, start_time, start_date, stop_id, day_type)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''', (trip_id, route_id, direction_id, start_time, start_date, stop_id, day_type))
+    conn.commit()
+    conn.close()
+
+def insert_external_factor(timestamp, weather_condition, temp_f, is_holiday):
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT OR IGNORE INTO external_factors (timestamp, weather_condition, temp_f, is_holiday)
+        VALUES (?, ?, ?, ?)
+    ''', (timestamp, weather_condition, temp_f, is_holiday))
+    conn.commit()
+    conn.close()
+
+def insert_train_observation(trip_id, route_id, actual_arrival_time, delay_seconds, stop_id, event_id):
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT OR IGNORE INTO train_observations (trip_id, route_id, actual_arrival_time, delay_seconds, stop_id, event_id)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (trip_id, route_id, actual_arrival_time, delay_seconds, stop_id, event_id))
+    conn.commit()
+    conn.close()
+
