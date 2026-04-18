@@ -48,6 +48,8 @@ def init_db():
             trip_id TEXT PRIMARY KEY,
             route_id TEXT,
             direction_id INTEGER,
+            start_time DATETIME,
+            start_date DATETIME,
             stop_id TEXT,
             day_type TEXT
         );
