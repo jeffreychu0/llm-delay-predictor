@@ -59,10 +59,10 @@ def process_feed(feed_url):
                 
         connect.commit()
         connect.close()
-        print("Data Import")
+        print(f"Data Imported from: {feed_url}")
         return
     except Exception as e:
-        print(f"Error processing feed: {e}")
+        print(f"Error processing feed {feed_url}: {e.with_traceback()}")
         return None
 
 if __name__ == "__main__":
