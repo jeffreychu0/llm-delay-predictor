@@ -31,7 +31,7 @@ def update_row(primary_key_value, new_values, table_name):
     conn.commit()
     conn.close()
     
-def proccess_feed(feed_url):
+def process_feed(feed_url):
     try:
         feed = gtfs_realtime_pb2.FeedMessage()
         response = requests.get(feed_url)
@@ -59,10 +59,11 @@ def proccess_feed(feed_url):
                 
         connect.commit()
         connect.close()
+        print("Data Import")
         return
     except Exception as e:
         print(f"Error processing feed: {e}")
         return None
-    
 
-print(proccess_feed(f"{base_url}{feeds[0]}"))
+if __name__ == "__main__":
+    print(process_feed(f"{base_url}{feeds[0]}"))
