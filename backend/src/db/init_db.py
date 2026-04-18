@@ -21,7 +21,7 @@ def init_db():
             stop_id TEXT NOT NULL,
             direction_id INTEGER,
             stop_sequence INTEGER,
-            PRIMARY KEY (route_id, stop_id, direction_id)
+            PRIMARY KEY (route_id, stop_id)
         );
 
         -- Table to associate stop_id
@@ -65,7 +65,7 @@ def init_db():
             stop_id TEXT,
             event_id TEXT,
             FOREIGN KEY (trip_id) REFERENCES trip_statistics(trip_id),
-            FOREIGN KEY (stop_id) REFERENCES stop_catalog(stop_id),
+            FOREIGN KEY (stop_id) REFERENCES stops(stop_id),
             FOREIGN KEY (event_id) REFERENCES mta_event_lookup(event_id)
         );
 
@@ -82,11 +82,11 @@ def init_db():
     conn.close()
 
 
-def inert_route_stop(route_id, stop_id, direction_id, stop_sequence):
+def insert_route_stop(route_id, stop_id, direction_id, stop_sequence):
     conn = sqlite3.connect(DB_PATH + '/mta.db')
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT OR IGNORE INTO route_to_stop (route_id, stop_id, direction_id, stop_sequence)
+        INSERT OR IGNORE INTO route_to_stop(route_id, stop_id, direction_id, stop_sequence)
         VALUES (?, ?, ?, ?)
     ''', (route_id, stop_id, direction_id, stop_sequence))
     conn.commit()
