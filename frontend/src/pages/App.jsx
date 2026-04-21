@@ -1,8 +1,8 @@
 import React, { useState, useCallback } from "react";
 import { useStations } from "../utils/useStations";
-import TrainMap from "./components/TrainMap";
-import SelectionInterface from "./components/SelectionInterface";
-import PredictionDisplay from "./components/PredictionDisplay";
+import TrainMap from "../components/TrainMap";
+import SelectionInterface from "../components/SelectionInterface";
+import PredictionDisplay from "../components/PredictionDisplay";
 import "../App.css";
 
 export default function App() {

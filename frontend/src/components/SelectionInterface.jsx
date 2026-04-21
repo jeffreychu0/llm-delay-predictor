@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 
-import { filterStationsByLine } from "../../utils/csvParser";
+import { filterStationsByLine } from "../utils/csvParser";
 
 export default function SelectionInterface({
   stations,
