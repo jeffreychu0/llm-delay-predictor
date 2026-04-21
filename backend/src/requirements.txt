@@ -2,3 +2,5 @@ gtfs-realtime-bindings
 requests
 python-dotenv
 protobuf
+numpy
+pandas
