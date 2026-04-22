@@ -2,5 +2,6 @@ gtfs-realtime-bindings
 requests
 python-dotenv
 protobuf
-ai-edge-litert
 numpy
+pandas
+ai-edge-litert

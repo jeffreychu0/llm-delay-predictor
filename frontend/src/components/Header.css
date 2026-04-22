@@ -3,13 +3,27 @@
   align-items: center;
   justify-content: space-between;
   padding: 1rem 2rem;
-  border-bottom: 1px solid #e5e7eb;
-  background-color: #ffffff;
+  border-bottom: 1px solid #333;
+  background-color: black;
+  color: white;
+  font-family: 'Helvetica', 'Arial', sans-serif;
 }
 
 .header__brand {
   font-size: 1.25rem;
   font-weight: 700;
+}
+
+.header__brand-link {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  color: inherit;
+}
+
+.header__icon {
+  height: 2rem;
+  margin-right: 0.75rem;
 }
 
 .header__nav {
@@ -19,5 +33,10 @@
 
 .header__link {
   text-decoration: none;
-  color: #111;
+  color: white;
+  transition: opacity 0.2s;
+}
+
+.header__link:hover {
+  opacity: 0.7;
 }
