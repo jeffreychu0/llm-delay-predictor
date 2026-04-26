@@ -179,4 +179,35 @@ def insert_train_timetable(trip_id,
 
     conn.commit()
     conn.close()
+
+
+def bulk_refresh_train_timetable(entries, chunk_size=10000):
+    if not entries:
+        return
+
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+
+    # Replace stale or partial static imports with a full refresh.
+    cursor.execute('DELETE FROM train_timetable')
+
+    sql = '''
+        INSERT INTO train_timetable(
+            trip_id,
+            route_id,
+            direction_id,
+            stop_id,
+            stop_sequence,
+            arrival_time,
+            departure_time,
+            headsign
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    '''
+
+    for start in range(0, len(entries), chunk_size):
+        chunk = entries[start:start + chunk_size]
+        cursor.executemany(sql, chunk)
+
+    conn.commit()
+    conn.close()
     
