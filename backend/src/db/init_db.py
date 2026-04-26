@@ -21,7 +21,7 @@ def init_db():
             stop_id TEXT NOT NULL,
             direction_id INTEGER,
             stop_sequence INTEGER,
-            PRIMARY KEY (route_id, stop_id, direction_id)
+            PRIMARY KEY (route_id, stop_id)
         );
 
         -- Table to associate stop_id
@@ -55,8 +55,7 @@ def init_db():
         );
                  
         -- Train observations from API
-        CREATE TABLE IF NOT EXISTS train_observations (   
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+        CREATE TABLE IF NOT EXISTS train_observations (
             trip_id TEXT,
             route_id TEXT,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -65,8 +64,9 @@ def init_db():
             stop_id TEXT,
             event_id TEXT,
             FOREIGN KEY (trip_id) REFERENCES trip_statistics(trip_id),
-            FOREIGN KEY (stop_id) REFERENCES stop_catalog(stop_id),
-            FOREIGN KEY (event_id) REFERENCES mta_event_lookup(event_id)
+            FOREIGN KEY (stop_id) REFERENCES stops(stop_id),
+            FOREIGN KEY (event_id) REFERENCES mta_event_lookup(event_id),
+            PRIMARY KEY (trip_id, stop_id)
         );
 
         -- External context factors for model features and analysis
@@ -76,7 +76,107 @@ def init_db():
             temp_f TEXT,
             is_holiday BOOLEAN DEFAULT FALSE
         );
+        -- Table for static train timetable data extracted from GTFS supplemented
+            CREATE TABLE IF NOT EXISTS train_timetable (
+            trip_id TEXT,
+            route_id TEXT,
+            direction_id INTEGER,
+            stop_id TEXT,
+            stop_sequence INTEGER,
+            arrival_time DATETIME,
+            departure_time DATETIME,
+            headsign TEXT,
+            PRIMARY KEY (trip_id, stop_id));
+            
     ''')    
     
     conn.commit()
     conn.close()
+
+
+
+def insert_route_stop(route_id, stop_id, direction_id, stop_sequence):
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT OR IGNORE INTO route_to_stop(route_id, stop_id, direction_id, stop_sequence)
+        VALUES (?, ?, ?, ?)
+    ''', (route_id, stop_id, direction_id, stop_sequence))
+    conn.commit()
+    conn.close(
+    )
+
+def insert_stop(stop_id, stop_name, borough, latitude, longitude):
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT OR IGNORE INTO stops (stop_id, stop_name, borough, latitude, longitude)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (stop_id, stop_name, borough, latitude, longitude))
+    conn.commit()
+    conn.close()
+
+def insert_mta_event(event_id, event_name, event_type, event_description, is_planned):
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT OR IGNORE INTO mta_event_lookup (event_id, event_name, event_type, event_description, is_planned)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (event_id, event_name, event_type, event_description, is_planned))
+    conn.commit()
+    conn.close()
+
+def insert_trip_statistic(trip_id, route_id, direction_id, start_time, start_date, stop_id, day_type):
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT OR IGNORE INTO trip_statistics (trip_id, route_id, direction_id, start_time, start_date, stop_id, day_type)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''', (trip_id, route_id, direction_id, start_time, start_date, stop_id, day_type))
+    conn.commit()
+    conn.close()
+
+def insert_external_factor(timestamp, weather_condition, temp_f, is_holiday):
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT OR IGNORE INTO external_factors (timestamp, weather_condition, temp_f, is_holiday)
+        VALUES (?, ?, ?, ?)
+    ''', (timestamp, weather_condition, temp_f, is_holiday))
+    conn.commit()
+    conn.close()
+
+def insert_train_observation(trip_id, route_id, actual_arrival_time, delay_seconds, stop_id, event_id):
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT OR IGNORE INTO train_observations (trip_id, route_id, actual_arrival_time, delay_seconds, stop_id, event_id)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (trip_id, route_id, actual_arrival_time, delay_seconds, stop_id, event_id))
+    conn.commit()
+    conn.close()
+
+def insert_train_timetable(trip_id, 
+                           stop_id, 
+                           stop_sequence, route_id, 
+                           trip_headsign, 
+                           direction_id, 
+                           arrival_time, 
+                           departure_time):
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT OR IGNORE INTO train_timetable(trip_id,
+            route_id,
+            direction_id,
+            stop_id,
+            stop_sequence,
+            arrival_time,
+            departure_time,
+            headsign) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                  ''', (trip_id, route_id, direction_id, stop_id, stop_sequence, arrival_time,departure_time, trip_headsign))
+
+    conn.commit()
+    conn.close()
+    

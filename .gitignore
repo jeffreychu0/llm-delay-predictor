@@ -5,8 +5,11 @@ __pycache__/
 venv/
 ENV/
 .env
-*.db
+
 *.sqlite3
+*.db
+backend/src/db/*.db
+backend/src/db/gtfs_supplemented/*.txt
 node_modules/
 dist/
 dist-ssr/
