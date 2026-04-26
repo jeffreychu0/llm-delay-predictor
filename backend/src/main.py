@@ -7,14 +7,19 @@ import concurrent.futures
 import time
 import os
 from db.init_db import *
+from db.gtfs_static_loader import GtfsStaticLoader
 from db.static_extractor import static_to_db
 
 def main():
     init_db() 
+    static_loader = GtfsStaticLoader()
     
     time.sleep(2) #wait for the database to be initialized before starting to process the feeds
+    static_summary = static_loader.execute(include_events=True)
     static_to_db() #extract the static data from the GTFS files and insert it into the database
 
+    print(f"GTFS static entities loaded: {static_summary}")
+    print("Static DB Formed")
     #parallel execuation of the feed processing function to speed up the data collection process
     
     with concurrent.futures.ThreadPoolExecutor() as executor:
