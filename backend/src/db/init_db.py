@@ -55,8 +55,7 @@ def init_db():
         );
                  
         -- Train observations from API
-        CREATE TABLE IF NOT EXISTS train_observations (   
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+        CREATE TABLE IF NOT EXISTS train_observations (
             trip_id TEXT,
             route_id TEXT,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -66,7 +65,8 @@ def init_db():
             event_id TEXT,
             FOREIGN KEY (trip_id) REFERENCES trip_statistics(trip_id),
             FOREIGN KEY (stop_id) REFERENCES stops(stop_id),
-            FOREIGN KEY (event_id) REFERENCES mta_event_lookup(event_id)
+            FOREIGN KEY (event_id) REFERENCES mta_event_lookup(event_id),
+            PRIMARY KEY (trip_id, stop_id)
         );
 
         -- External context factors for model features and analysis
@@ -76,10 +76,23 @@ def init_db():
             temp_f TEXT,
             is_holiday BOOLEAN DEFAULT FALSE
         );
+        -- Table for static train timetable data extracted from GTFS supplemented
+            CREATE TABLE IF NOT EXISTS train_timetable (
+            trip_id TEXT,
+            route_id TEXT,
+            direction_id INTEGER,
+            stop_id TEXT,
+            stop_sequence INTEGER,
+            arrival_time DATETIME,
+            departure_time DATETIME,
+            headsign TEXT,
+            PRIMARY KEY (trip_id, stop_id));
+            
     ''')    
     
     conn.commit()
     conn.close()
+
 
 
 def insert_route_stop(route_id, stop_id, direction_id, stop_sequence):
@@ -143,3 +156,27 @@ def insert_train_observation(trip_id, route_id, actual_arrival_time, delay_secon
     conn.commit()
     conn.close()
 
+def insert_train_timetable(trip_id, 
+                           stop_id, 
+                           stop_sequence, route_id, 
+                           trip_headsign, 
+                           direction_id, 
+                           arrival_time, 
+                           departure_time):
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT OR IGNORE INTO train_timetable(trip_id,
+            route_id,
+            direction_id,
+            stop_id,
+            stop_sequence,
+            arrival_time,
+            departure_time,
+            headsign) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                  ''', (trip_id, route_id, direction_id, stop_id, stop_sequence, arrival_time,departure_time, trip_headsign))
+
+    conn.commit()
+    conn.close()
+    

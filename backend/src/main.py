@@ -6,11 +6,14 @@ import api.mta_api
 import concurrent.futures
 import time
 import os
-from db.init_db import init_db
+from db.init_db import *
+from db.static_extractor import static_to_db
+
 def main():
     init_db() 
+    
     time.sleep(2) #wait for the database to be initialized before starting to process the feeds
-
+    static_to_db() #extract the static data from the GTFS files and insert it into the database
 
     #parallel execuation of the feed processing function to speed up the data collection process
     

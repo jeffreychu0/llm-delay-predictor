@@ -70,6 +70,9 @@ def proccess_feed(feed_url):
             
 
   
-
+def process_daily_schedule():
+    for feed in feeds:
+        feed_url = base_url + feed
+        proccess_feed(feed_url)
     
 
