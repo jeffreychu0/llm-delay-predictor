@@ -67,6 +67,17 @@ class GtfsStaticLoader:
     def load_route_to_stop(self):
         trips_file = os.path.join(self.gtfs_path, 'trips.txt')
         stop_times_file = os.path.join(self.gtfs_path, 'stop_times.txt')
+        calendar_file = os.path.join(self.gtfs_path, 'calendar.txt')
+
+        service_is_weekend = {}
+        with open(calendar_file, 'r', encoding='utf-8') as f:
+            for row in csv.DictReader(f):
+                service_id = row.get('service_id')
+                if not service_id:
+                    continue
+                service_is_weekend[service_id] = (
+                    row.get('saturday') == '1' or row.get('sunday') == '1'
+                )
 
         trip_route_lookup = {}
         with open(trips_file, 'r', encoding='utf-8') as f:
@@ -75,32 +86,89 @@ class GtfsStaticLoader:
                 route_id = row.get('route_id')
                 if not trip_id or not route_id:
                     continue
-                trip_route_lookup[trip_id] = (
-                    route_id,
-                    self._safe_int(row.get('direction_id')),
-                )
+                service_id = row.get('service_id') or ''
+                direction_id = self._safe_int(row.get('direction_id'))
+                headsign = row.get('trip_headsign') or ''
+                trip_route_lookup[trip_id] = {
+                    'route_id': route_id,
+                    'direction_id': direction_id,
+                    'service_is_weekend': service_is_weekend.get(service_id, False),
+                    'is_express': self._is_express_trip(route_id, headsign),
+                }
 
-        route_stop_min_seq = {}
+        # Pass 1: track longest trip per (route_id, direction_id) by max stop_sequence.
+        trip_max_seq = {}
+        longest_trip_by_route_dir = {}
         with open(stop_times_file, 'r', encoding='utf-8') as f:
             for row in csv.DictReader(f):
                 trip_id = row.get('trip_id')
-                stop_id = row.get('stop_id')
-                if not trip_id or not stop_id or trip_id not in trip_route_lookup:
+                trip_info = trip_route_lookup.get(trip_id)
+                if not trip_info:
                     continue
 
-                route_id, direction_id = trip_route_lookup[trip_id]
                 stop_sequence = self._safe_int(row.get('stop_sequence'))
                 if stop_sequence is None:
                     continue
 
-                key = (route_id, stop_id)
-                existing = route_stop_min_seq.get(key)
-                if existing is None or stop_sequence < existing[1]:
-                    route_stop_min_seq[key] = (direction_id, stop_sequence)
+                current_max = trip_max_seq.get(trip_id)
+                if current_max is None or stop_sequence > current_max:
+                    trip_max_seq[trip_id] = stop_sequence
+
+                route_dir_key = (trip_info['route_id'], trip_info['direction_id'])
+                existing = longest_trip_by_route_dir.get(route_dir_key)
+                if existing is None or trip_max_seq[trip_id] > existing[1]:
+                    longest_trip_by_route_dir[route_dir_key] = (trip_id, trip_max_seq[trip_id])
+
+        longest_trip_ids = {trip_id for trip_id, _ in longest_trip_by_route_dir.values()}
+
+        # Pass 2: build feature flags for all route-stop-direction combos and sequence from longest trip.
+        route_stop_features = {}
+        longest_route_dir_stop_seq = {}
+
+        with open(stop_times_file, 'r', encoding='utf-8') as f:
+            for row in csv.DictReader(f):
+                trip_id = row.get('trip_id')
+                stop_id = row.get('stop_id')
+                trip_info = trip_route_lookup.get(trip_id)
+                if not trip_id or not stop_id or not trip_info:
+                    continue
+
+                route_id = trip_info['route_id']
+                direction_id = trip_info['direction_id']
+                stop_sequence = self._safe_int(row.get('stop_sequence'))
+                if stop_sequence is None:
+                    continue
+
+                key = (route_id, stop_id, direction_id)
+                existing = route_stop_features.get(key)
+                if existing is None:
+                    route_stop_features[key] = {
+                        'is_weekend': 1 if trip_info['service_is_weekend'] else 0,
+                        'is_overnight': 1 if self._row_is_overnight(row) else 0,
+                        'is_express': 1 if trip_info['is_express'] else 0,
+                    }
+                else:
+                    if trip_info['service_is_weekend']:
+                        existing['is_weekend'] = 1
+                    if self._row_is_overnight(row):
+                        existing['is_overnight'] = 1
+                    if trip_info['is_express']:
+                        existing['is_express'] = 1
+
+                if trip_id in longest_trip_ids:
+                    longest_route_dir_stop_seq[(route_id, direction_id, stop_id)] = stop_sequence
 
         rows = [
-            (route_id, stop_id, direction_id, stop_sequence)
-            for (route_id, stop_id), (direction_id, stop_sequence) in route_stop_min_seq.items()
+            (
+                route_id,
+                stop_id,
+                direction_id,
+                features['is_weekend'],
+                features['is_overnight'],
+                features['is_express'],
+                longest_route_dir_stop_seq.get((route_id, direction_id, stop_id)),
+            )
+            for (route_id, stop_id, direction_id), features in route_stop_features.items()
         ]
 
         with self._connect() as conn:
@@ -108,8 +176,16 @@ class GtfsStaticLoader:
             cursor.execute('DELETE FROM route_to_stop')
             cursor.executemany(
                 '''
-                INSERT INTO route_to_stop(route_id, stop_id, direction_id, stop_sequence)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO route_to_stop(
+                    route_id,
+                    stop_id,
+                    direction_id,
+                    is_weekend,
+                    is_overnight,
+                    is_express,
+                    stop_sequence
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 ''',
                 rows,
             )
@@ -131,6 +207,7 @@ class GtfsStaticLoader:
                 calendar_lookup[service_id] = (
                     self._day_type_from_calendar_row(row),
                     row.get('start_date') or None,
+                    row.get('end_date') or None,
                 )
 
         trip_lookup = {}
@@ -167,15 +244,17 @@ class GtfsStaticLoader:
         rows = []
         for trip_id, trip in trip_lookup.items():
             service_id = trip['service_id']
-            day_type, start_date = calendar_lookup.get(service_id, ('weekday', None))
+            day_type, start_date, end_date = calendar_lookup.get(service_id, ('weekday', None, None))
             first_stop = first_stop_by_trip.get(trip_id)
 
             rows.append((
                 trip_id,
                 trip['route_id'],
                 trip['direction_id'],
+                service_id,
                 first_stop['arrival_time'] if first_stop else None,
                 start_date,
+                end_date,
                 first_stop['stop_id'] if first_stop else None,
                 day_type,
             ))
@@ -189,11 +268,13 @@ class GtfsStaticLoader:
                     trip_id,
                     route_id,
                     direction_id,
+                    service_id,
                     start_time,
                     start_date,
+                    end_date,
                     stop_id,
                     day_type
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''',
                 rows,
             )
@@ -289,3 +370,28 @@ class GtfsStaticLoader:
         if is_weekend and not is_weekday:
             return 'weekend'
         return 'mixed'
+
+    @staticmethod
+    def _is_express_trip(route_id, trip_headsign):
+        if route_id and route_id.upper().endswith('X'):
+            return True
+        return 'express' in (trip_headsign or '').lower()
+
+    @staticmethod
+    def _row_is_overnight(row):
+        arrival_time = row.get('arrival_time') or ''
+        departure_time = row.get('departure_time') or ''
+        return (
+            GtfsStaticLoader._is_overnight_time(arrival_time)
+            or GtfsStaticLoader._is_overnight_time(departure_time)
+        )
+
+    @staticmethod
+    def _is_overnight_time(value):
+        if not value:
+            return False
+        try:
+            hour = int(value.split(':', 1)[0])
+            return hour >= 24 or hour < 5
+        except (TypeError, ValueError):
+            return False
