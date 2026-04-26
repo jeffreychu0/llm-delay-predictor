@@ -106,5 +106,5 @@ def static_to_db(route_ids=None):
                 entry['headsign']
             ))
 
-    # bulk_refresh_train_timetable(rows)
+    bulk_refresh_train_timetable(rows)
         
