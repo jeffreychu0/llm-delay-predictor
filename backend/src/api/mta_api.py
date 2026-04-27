@@ -13,7 +13,7 @@ base_url = "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/"
 stops = ""
 feeds = [
     "nyct%2Fgtfs", "nyct%2Fgtfs-ace", "nyct%2Fgtfs-bdfm", 
-    "nyct%2Fgtfs-g", "nyct%2Fgtfs-l", "nyct%2Fgtfs-7", 
+    "nyct%2Fgtfs-g", "nyct%2Fgtfs-l", "nyct%2Fgtfs-si", 
     "nyct%2Fgtfs-nqrw", "nyct%2Fgtfs-jz"
 ]
 

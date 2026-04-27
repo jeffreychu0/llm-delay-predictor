@@ -1,6 +1,6 @@
 import csv
 import os
-from db.init_db import insert_train_timetable
+from db.init_db import bulk_refresh_train_timetable
 
 
 def _load_train_route_ids(routes_file):
@@ -25,7 +25,7 @@ def extract_timetable_from_txt(route_ids=None):
     stop_times_file = os.path.join(gtfs_path, 'stop_times.txt')
 
     allowed_route_ids = set(route_ids) if route_ids else _load_train_route_ids(routes_file)
-
+    
     #calender to get service
     calender = {}
 
@@ -68,7 +68,7 @@ def extract_timetable_from_txt(route_ids=None):
             trip_id = row['trip_id']
             if trip_id not in trips:
                 continue
-            
+                        
             trip = trips[trip_id]
             schedule_type = calender.get(trip['service_id'], 'weekday')
             
@@ -92,16 +92,19 @@ def extract_timetable_from_txt(route_ids=None):
 def static_to_db(route_ids=None):
     timetables = extract_timetable_from_txt(route_ids=route_ids)
 
+    rows = []
     for entries in timetables.values():
         for entry in entries:
-            insert_train_timetable(
+            rows.append((
                 entry['trip_id'],
+                entry['route_id'],
+                entry['direction_id'],
                 entry['stop_id'],
                 entry['stop_sequence'],
-                entry['route_id'],
-                entry['headsign'],
-                entry['direction_id'],
                 entry['arrival_time'],
-                entry['departure_time']
-            )
+                entry['departure_time'],
+                entry['headsign']
+            ))
+
+    bulk_refresh_train_timetable(rows)
         
