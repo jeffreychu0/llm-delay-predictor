@@ -5,3 +5,4 @@ protobuf
 numpy
 pandas
 ai-edge-litert
+matplotlib

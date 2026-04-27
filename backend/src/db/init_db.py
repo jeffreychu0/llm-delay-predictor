@@ -11,7 +11,7 @@ def init_db():
     # Route-to-stop is a derived convenience table and safe to recreate when schema changes.
     cursor.execute('DROP TABLE IF EXISTS route_to_stop')
     cursor.execute('DROP TABLE IF EXISTS train_observations')
-    cursor.execute('DROP TABLE IF EXISTS trip_feed_matches')
+    cursor.execute('DROP TABLE IF EXISTS observation_diagnostics')
     cursor.execute('DROP TABLE IF EXISTS trip_statistics')
     
 
@@ -78,31 +78,14 @@ def init_db():
             FOREIGN KEY (event_id) REFERENCES mta_event_lookup(event_id)
         );
 
-        -- Realtime to scheduled feed matches used to align live TripUpdates to static GTFS trips.
-        CREATE TABLE IF NOT EXISTS trip_feed_matches (
-            match_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        -- Diagnostic and anomaly records tied to realtime observations.
+        CREATE TABLE IF NOT EXISTS observation_diagnostics (
+            diagnostic_id INTEGER PRIMARY KEY AUTOINCREMENT,
             observation_id INTEGER NOT NULL,
-            realtime_trip_id TEXT NOT NULL,
-            static_trip_id TEXT,
-            route_id TEXT,
-            direction_id INTEGER,
-            realtime_start_time DATETIME,
-            realtime_start_date DATETIME,
-            scheduled_start_time DATETIME,
-            scheduled_start_date DATETIME,
-            scheduled_day_type TEXT,
-            realtime_stop_id TEXT,
-            realtime_stop_sequence INTEGER,
-            static_stop_id TEXT,
-            static_stop_sequence INTEGER,
-            actual_arrival_time DATETIME,
-            delay_seconds INTEGER,
-            schedule_lateness_seconds INTEGER,
-            match_method TEXT,
-            match_score REAL DEFAULT 0.0,
+            diagnostic_type TEXT NOT NULL,
+            details TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (observation_id) REFERENCES train_observations(observation_id),
-            FOREIGN KEY (static_trip_id) REFERENCES trip_statistics(trip_id)
+            FOREIGN KEY (observation_id) REFERENCES train_observations(observation_id)
         );
 
         -- External context factors for model features and analysis
@@ -213,76 +196,18 @@ def insert_train_observation(trip_id, route_id, actual_arrival_time, delay_secon
     return observation_id
 
 
-def insert_trip_feed_match(
-    observation_id,
-    realtime_trip_id,
-    static_trip_id,
-    route_id,
-    direction_id,
-    realtime_start_time,
-    realtime_start_date,
-    scheduled_start_time,
-    scheduled_start_date,
-    scheduled_day_type,
-    realtime_stop_id,
-    realtime_stop_sequence,
-    static_stop_id,
-    static_stop_sequence,
-    actual_arrival_time,
-    delay_seconds,
-    schedule_lateness_seconds,
-    match_method,
-    match_score,
-):
+def insert_observation_diagnostic(observation_id, diagnostic_type, details):
     conn = sqlite3.connect(DB_PATH + '/mta.db')
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT INTO trip_feed_matches(
-            observation_id,
-            realtime_trip_id,
-            static_trip_id,
-            route_id,
-            direction_id,
-            realtime_start_time,
-            realtime_start_date,
-            scheduled_start_time,
-            scheduled_start_date,
-            scheduled_day_type,
-            realtime_stop_id,
-            realtime_stop_sequence,
-            static_stop_id,
-            static_stop_sequence,
-            actual_arrival_time,
-            delay_seconds,
-            schedule_lateness_seconds,
-            match_method,
-            match_score
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (
-        observation_id,
-        realtime_trip_id,
-        static_trip_id,
-        route_id,
-        direction_id,
-        realtime_start_time,
-        realtime_start_date,
-        scheduled_start_time,
-        scheduled_start_date,
-        scheduled_day_type,
-        realtime_stop_id,
-        realtime_stop_sequence,
-        static_stop_id,
-        static_stop_sequence,
-        actual_arrival_time,
-        delay_seconds,
-        schedule_lateness_seconds,
-        match_method,
-        match_score,
-    ))
-    match_id = cursor.lastrowid
+        INSERT INTO observation_diagnostics (observation_id, diagnostic_type, details)
+        VALUES (?, ?, ?)
+    ''', (observation_id, diagnostic_type, details))
+    diagnostic_id = cursor.lastrowid
     conn.commit()
     conn.close()
-    return match_id
+    return diagnostic_id
+
 
 def insert_train_timetable(trip_id, 
                            stop_id, 
