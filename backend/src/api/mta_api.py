@@ -235,13 +235,24 @@ def _find_best_static_match(
     # Direction matching breaks ties when multiple static trips share the same
     # time code (uncommon but possible on shared-track routes).
     best = None
-    for static_trip_id, static_direction_id, _, stop_arr, stop_dep in rows:
+    for static_trip_id, static_direction_id, sched_start, stop_arr, stop_dep in rows:
         stop_schedule_time = stop_arr or stop_dep
+
+        # Apply the same overnight correction as _compute_schedule_delay_seconds.
+        effective_date = realtime_start_date
+        if sched_start:
+            try:
+                if int(str(sched_start).split(':')[0]) >= 24:
+                    adjusted = datetime.strptime(str(realtime_start_date), "%Y%m%d") - timedelta(days=1)
+                    effective_date = adjusted.strftime("%Y%m%d")
+            except (ValueError, IndexError):
+                pass
+
         stop_delta = None
         if stop_schedule_time and actual_arrival_iso:
             stop_delta = _compute_time_delta_seconds(
                 actual_arrival_iso=actual_arrival_iso,
-                service_date=realtime_start_date,
+                service_date=effective_date,
                 gtfs_time=stop_schedule_time,
             )
 
@@ -306,27 +317,41 @@ def _compute_schedule_delay_seconds(
 
     conn = sqlite3.connect(f"{DB_PATH}/mta.db")
     cursor = conn.cursor()
-    cursor.execute(
-        '''
-        SELECT arrival_time, departure_time
-        FROM train_timetable
-        WHERE trip_id = ? AND stop_id = ?
-        ORDER BY stop_sequence
-        LIMIT 1
-        ''',
-        (static_trip_id, stop_id),
-    )
-    row = cursor.fetchone()
-    conn.close()
+    try:
+        cursor.execute(
+            '''
+            SELECT arrival_time, departure_time
+            FROM train_timetable
+            WHERE trip_id = ? AND stop_id = ?
+            ORDER BY stop_sequence
+            LIMIT 1
+            ''',
+            (static_trip_id, stop_id),
+        )
+        row = cursor.fetchone()
+
+        cursor.execute(
+            "SELECT start_time FROM trip_statistics WHERE trip_id = ? LIMIT 1",
+            (static_trip_id,),
+        )
+        st_row = cursor.fetchone()
+    finally:
+        conn.close()
 
     scheduled_gtfs_time = scheduled_stop_time or ((row[0] or row[1]) if row else None)
     if not scheduled_gtfs_time:
-        # Do NOT fall back to the trip start time — comparing the actual arrival
-        # at a mid-route stop against the trip origin time creates artificial
-        # multi-thousand-second "delays" proportional to run time, not real delay.
         return None
 
-    return _compute_signed_delay_seconds(actual_arrival_iso, realtime_start_date, scheduled_gtfs_time)
+    effective_start_date = realtime_start_date
+    if st_row and st_row[0]:
+        try:
+            if int(str(st_row[0]).split(':')[0]) >= 24:
+                adjusted = datetime.strptime(str(realtime_start_date), "%Y%m%d") - timedelta(days=1)
+                effective_start_date = adjusted.strftime("%Y%m%d")
+        except (ValueError, IndexError):
+            pass
+
+    return _compute_signed_delay_seconds(actual_arrival_iso, effective_start_date, scheduled_gtfs_time)
 
 
 def _compute_signed_delay_seconds(actual_arrival_iso, service_date, gtfs_time):
@@ -414,14 +439,6 @@ def _parse_service_datetime(service_date, gtfs_time):
 
     days_offset, normalized_hour = divmod(hour, 24)
 
-    # MTA NYCT GTFS-rt sends the calendar date (start_date) for overnight trips,
-    # i.e. the date the train actually runs. GTFS static anchors times >24h to the
-    # *previous* service date (e.g. 25:53 on Apr 26 = 01:53 AM Apr 27).
-    # Adding days_offset on top of the already-correct calendar date would overshoot
-    # by one day. Compensate by subtracting 1 from days_offset when it is non-zero.
-    if days_offset > 0:
-        base_date += timedelta(days=days_offset - 1)
-
     local_dt = datetime(
         base_date.year,
         base_date.month,
@@ -430,7 +447,7 @@ def _parse_service_datetime(service_date, gtfs_time):
         minute,
         second,
         tzinfo=NY_TZ,
-    )
+    ) + timedelta(days=days_offset)
 
     return local_dt.astimezone(timezone.utc)
 

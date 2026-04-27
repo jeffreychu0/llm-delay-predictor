@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
+plt.style.use("dark_background")
 from matplotlib.animation import FuncAnimation
 from matplotlib.widgets import Button
 
@@ -139,16 +140,26 @@ def _floor_to_bucket(dt, bucket_seconds):
 
 
 def _aggregate_mean_by_time(rows, bucket_seconds):
+    """Average delay per bucket, keeping only the latest observation per trip_id.
+
+    rows: iterable of (dt, value, trip_id)
+    Deduplication prevents the same trip from being counted multiple times when
+    the poll interval is shorter than bucket_seconds.
+    """
+    # bucket_dt -> {trip_id: (latest_dt, value)}
     buckets = {}
-    for dt, value in rows:
+    for dt, value, trip_id in rows:
         bucket_dt = _floor_to_bucket(dt, bucket_seconds)
-        values = buckets.setdefault(bucket_dt, [])
-        values.append(value)
+        if bucket_dt not in buckets:
+            buckets[bucket_dt] = {}
+        existing = buckets[bucket_dt].get(trip_id)
+        if existing is None or dt >= existing[0]:
+            buckets[bucket_dt][trip_id] = (dt, value)
 
     points = []
-    for dt in sorted(buckets.keys()):
-        vals = buckets[dt]
-        points.append((dt, sum(vals) / len(vals)))
+    for bucket_dt in sorted(buckets.keys()):
+        vals = [v for _, v in buckets[bucket_dt].values()]
+        points.append((bucket_dt, sum(vals) / len(vals)))
     return points
 
 
@@ -163,7 +174,7 @@ def build_route_series(rows, window_minutes, bucket_seconds):
             continue
 
         route_points = route_buckets.setdefault(route_id, [])
-        route_points.append((dt, delay_seconds))
+        route_points.append((dt, delay_seconds, _trip_id))
 
     by_route = {}
     for route_id, pairs in route_buckets.items():
@@ -191,7 +202,7 @@ def build_trip_series_for_route(rows, route_id, window_minutes, bucket_seconds):
 
         key = trip_id or "unknown_trip"
         trip_points = trip_buckets.setdefault(key, [])
-        trip_points.append((dt, delay_seconds))
+        trip_points.append((dt, delay_seconds, key))
 
     by_trip = {}
     for trip_id, pairs in trip_buckets.items():
@@ -300,8 +311,6 @@ def main():
     args = parse_args()
     route_filter = [r.strip() for r in args.routes.split(",") if r.strip()] if args.routes else []
 
-    conn = sqlite3.connect(DB_PATH + "/mta.db")
-
     fig = plt.figure(figsize=(16, 9))
     gs = fig.add_gridspec(2, 2, height_ratios=[3, 1], width_ratios=[3, 2], hspace=0.35, wspace=0.35)
     ax_plot = fig.add_subplot(gs[0, :])
@@ -354,7 +363,8 @@ def main():
             if x + width > right:
                 break
             tab_ax = fig.add_axes([x, y, width, height])
-            button = Button(tab_ax, label)
+            button = Button(tab_ax, label, color="#2a2a2a", hovercolor="#444444")
+            button.label.set_color("white")
             button.on_clicked(lambda _evt, lbl=label: set_active_tab(lbl))
             state["tab_axes"].append(tab_ax)
             state["tab_buttons"].append(button)
@@ -425,15 +435,19 @@ def main():
         ax_stats.text(0.01, 0.95, stats_text, va="top", family="monospace", fontsize=9)
 
     def update(_frame):
-        rows = get_rows(conn, args.max_points, route_filter)
+        conn = sqlite3.connect(DB_PATH + "/mta.db", timeout=10)
+        try:
+            rows = get_rows(conn, args.max_points, route_filter)
+            coverage_stats = get_coverage_stats(conn, route_filter, args.window_minutes)
+        finally:
+            conn.close()
         by_route = build_route_series(rows, args.window_minutes, args.bucket_seconds)
-        coverage_stats = get_coverage_stats(conn, route_filter, args.window_minutes)
 
         routes = sorted(by_route.keys())
         rebuild_tab_bar(routes)
 
         ax_plot.clear()
-        ax_plot.axhline(0, color="gray", linewidth=1, linestyle="--")
+        ax_plot.axhline(0, color="#888888", linewidth=1, linestyle="--")
         ax_plot.set_xlabel("Time (UTC)")
         ax_plot.set_ylabel("Delay seconds")
         ax_plot.grid(alpha=0.3)
@@ -458,11 +472,7 @@ def main():
     interval_ms = int(max(args.refresh_seconds, 0.5) * 1000)
     _ani = FuncAnimation(fig, update, interval=interval_ms)
 
-    try:
-        plt.tight_layout()
-        plt.show()
-    finally:
-        conn.close()
+    plt.show()
 
 
 if __name__ == "__main__":
