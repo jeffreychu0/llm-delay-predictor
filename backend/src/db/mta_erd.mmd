@@ -1,0 +1,83 @@
+erDiagram
+    ROUTE_TO_STOP {
+        TEXT route_id PK
+        TEXT stop_id PK
+        INTEGER direction_id PK
+        INTEGER is_weekend
+        INTEGER is_overnight
+        INTEGER is_express
+        INTEGER stop_sequence
+    }
+
+    STOPS {
+        TEXT stop_id PK
+        TEXT stop_name
+        REAL latitude
+        REAL longitude
+    }
+
+    MTA_EVENT_LOOKUP {
+        TEXT event_id PK
+        TEXT event_name
+        TEXT event_type
+        TEXT event_description
+        BOOLEAN is_planned
+    }
+
+    TRIP_STATISTICS {
+        TEXT trip_id PK
+        TEXT route_id
+        INTEGER direction_id
+        TEXT service_id
+        DATETIME start_time
+        DATETIME start_date
+        DATETIME end_date
+        TEXT stop_id
+        TEXT day_type
+    }
+
+    TRAIN_OBSERVATIONS {
+        INTEGER observation_id PK
+        TEXT trip_id FK
+        TEXT route_id
+        DATETIME timestamp
+        DATETIME actual_arrival_time
+        INTEGER delay_seconds
+        TEXT stop_id FK
+        TEXT event_id FK
+    }
+
+    OBSERVATION_DIAGNOSTICS {
+        INTEGER diagnostic_id PK
+        INTEGER observation_id FK
+        TEXT diagnostic_type
+        TEXT details
+        DATETIME created_at
+    }
+
+    EXTERNAL_FACTORS {
+        DATETIME timestamp PK
+        TEXT weather_condition
+        TEXT temp_f
+        BOOLEAN is_holiday
+    }
+
+    TRAIN_TIMETABLE {
+        TEXT trip_id PK
+        TEXT route_id
+        INTEGER direction_id
+        TEXT stop_id PK
+        INTEGER stop_sequence
+        DATETIME arrival_time
+        DATETIME departure_time
+        TEXT headsign
+    }
+
+    TRIP_STATISTICS ||--o{ TRAIN_TIMETABLE : "trip_id"
+    TRAIN_OBSERVATIONS }o--|| TRIP_STATISTICS : "trip_id"
+    TRAIN_OBSERVATIONS }o--|| STOPS : "stop_id"
+    TRAIN_OBSERVATIONS }o--|| MTA_EVENT_LOOKUP : "event_id"
+    OBSERVATION_DIAGNOSTICS }o--|| TRAIN_OBSERVATIONS : "observation_id"
+    ROUTE_TO_STOP }o--|| STOPS : "stop_id"
+    ROUTE_TO_STOP }o--|| TRIP_STATISTICS : "route_id"
+    TRAIN_TIMETABLE }o--|| STOPS : "stop_id"
