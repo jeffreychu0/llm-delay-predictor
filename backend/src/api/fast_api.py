@@ -1,5 +1,6 @@
+import logging
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,6 +9,8 @@ from matplotlib.pyplot import streamplot
 from backend.src.chatbot import Chatbot
 from db.init_db import DB_PATH, view_train_timetable, view_all_stops_from_route, view_static_timetable_for_stop
 
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
 	title="MTA Delay API",
@@ -37,6 +40,16 @@ def normalize_direction(direction: str) -> int:
 	if value in {"southbound", "south", "s", "1"}:
 		return 1
 	raise HTTPException(status_code=400, detail="direction must be northbound or southbound")
+
+
+def _stop_id_error_detail(line: str, from_stop_id: str, to_stop_id: str) -> str:
+	return (
+		f"from_stop_id/to_stop_id must be GTFS stop IDs for line {line}. "
+		f"Examples look like 'R01', 'A02S', or 'D43N'. "
+		f"Received from_stop_id={from_stop_id!r}, to_stop_id={to_stop_id!r}. "
+		"If your frontend is passing numeric Station ID values from stations.csv, "
+		"map them to GTFS Stop ID before calling /delays/estimate."
+	)
 
 
 @app.get("/health")
@@ -147,12 +160,59 @@ def get_estimated_delay_between_stations(
 		if not stops:
 			raise HTTPException(status_code=404, detail="No stops found for line and direction")
 
+    
 		sequence_by_stop = {row["stop_id"]: row["stop_sequence"] for row in stops}
-		if from_stop_id not in sequence_by_stop or to_stop_id not in sequence_by_stop:
-			raise HTTPException(status_code=404, detail="from_stop_id or to_stop_id not found for line/direction")
 
-		from_seq = sequence_by_stop[from_stop_id]
-		to_seq = sequence_by_stop[to_stop_id]
+		def _resolve_stop(requested_id: str) -> str | None:
+			# If it's already a route_to_stop key, return it.
+			if requested_id in sequence_by_stop:
+				return requested_id
+
+			# Try appending directional suffix (N for northbound(0), S for southbound(1)).
+			suffix = "N" if direction_id == 0 else "S"
+			cand = f"{requested_id}{suffix}"
+			if cand in sequence_by_stop:
+				return cand
+
+			# If requested_id is a GTFS-style id (like 'M19'), map via stop_name
+			cursor.execute(
+				"SELECT stop_name FROM stops WHERE stop_id = ? LIMIT 1",
+				(requested_id,),
+			)
+			row = cursor.fetchone()
+			if row:
+				stop_name = row["stop_name"]
+				cursor.execute(
+					"SELECT stop_id FROM stops WHERE stop_name = ?",
+					(stop_name,),
+				)
+				candidates = [r["stop_id"] for r in cursor.fetchall()]
+				# prefer exact direction-suffixed candidate
+				for s in candidates:
+					if s in sequence_by_stop and s.endswith(suffix):
+						return s
+				# else return any candidate that exists in sequence_by_stop
+				for s in candidates:
+					if s in sequence_by_stop:
+						return s
+
+			# As a last resort, if the requested_id is numeric and sequence_by_stop contains numeric keys without suffix
+			if requested_id.isdigit() and requested_id in sequence_by_stop:
+				return requested_id
+
+			return None
+
+		resolved_from = _resolve_stop(from_stop_id)
+		resolved_to = _resolve_stop(to_stop_id)
+
+		if not resolved_from or not resolved_to:
+			raise HTTPException(
+				status_code=422,
+				detail=_stop_id_error_detail(line, from_stop_id, to_stop_id),
+			)
+
+		from_seq = sequence_by_stop[resolved_from]
+		to_seq = sequence_by_stop[resolved_to]
 		if from_seq > to_seq:
 			raise HTTPException(
 				status_code=400,
@@ -190,6 +250,8 @@ def get_estimated_delay_between_stations(
 		"direction": "northbound" if direction_id == 0 else "southbound",
 		"from_stop_id": from_stop_id,
 		"to_stop_id": to_stop_id,
+		"resolved_from_stop_id": resolved_from,
+		"resolved_to_stop_id": resolved_to,
 		"segment_average_delay_seconds": segment_avg,
 		"stop_count": len(segment_rows),
 		"segment_stops": segment_rows,
@@ -200,7 +262,7 @@ def get_estimated_delay_between_stations(
 def get_delay_data_for_line(line: str, window_minutes: int = Query(default=15, ge=1, le=180)):
 	conn = get_connection()
 	cursor = conn.cursor()
-	cutoff = (datetime.utcnow() - timedelta(minutes=window_minutes)).isoformat()
+	cutoff = (datetime.now(timezone.utc) - timedelta(minutes=window_minutes)).strftime("%Y-%m-%d %H:%M:%S")
 
 	try:
 		cursor.execute(
@@ -261,7 +323,7 @@ def get_delay_data_for_line(line: str, window_minutes: int = Query(default=15, g
 def get_delay_data_for_station(stop_id: str, window_minutes: int = Query(default=60, ge=1, le=720)):
 	conn = get_connection()
 	cursor = conn.cursor()
-	cutoff = (datetime.utcnow() - timedelta(minutes=window_minutes)).isoformat()
+	cutoff = (datetime.now(timezone.utc) - timedelta(minutes=window_minutes)).strftime("%Y-%m-%d %H:%M:%S")
 
 	try:
 		cursor.execute(
@@ -349,89 +411,164 @@ def get_average_delays_across_all_stations(min_observations: int = Query(default
 		"stations": rows,
 	}
 
+def _resolve_db_stop_id(cursor: sqlite3.Cursor, gtfs_stop_id: str, train: str, direction_id: int | None) -> str | None:
+	"""Resolve a GTFS stop ID (e.g. 'A41') to the stop_id used in train_observations.
+
+	Queries route_to_stop first (same ID space as train_observations), then falls
+	back to the stops table.  When direction_id is None, tries both N and S suffixes.
+	"""
+	suffixes = (["N", "S"] if direction_id is None else
+				["N" if direction_id == 0 else "S", "S" if direction_id == 0 else "N"])
+	candidates = [gtfs_stop_id] + [f"{gtfs_stop_id}{s}" for s in suffixes]
+
+	# Primary: route_to_stop shares its stop_id space with train_observations
+	dir_filter = "AND direction_id = ?" if direction_id is not None else ""
+	for candidate in candidates:
+		params = (train, candidate) if direction_id is None else (train, direction_id, candidate)
+		cursor.execute(
+			f"SELECT stop_id FROM route_to_stop WHERE route_id = ? {dir_filter} AND stop_id = ? LIMIT 1",
+			params,
+		)
+		row = cursor.fetchone()
+		if row:
+			return row["stop_id"]
+	params = (train, f"{gtfs_stop_id}%") if direction_id is None else (train, direction_id, f"{gtfs_stop_id}%")
+	cursor.execute(
+		f"SELECT stop_id FROM route_to_stop WHERE route_id = ? {dir_filter} AND stop_id LIKE ? LIMIT 1",
+		params,
+	)
+	row = cursor.fetchone()
+	if row:
+		return row["stop_id"]
+
+	# Fallback: stops table (direction-agnostic)
+	for candidate in candidates:
+		cursor.execute("SELECT stop_id FROM stops WHERE stop_id = ? LIMIT 1", (candidate,))
+		row = cursor.fetchone()
+		if row:
+			return row["stop_id"]
+	cursor.execute("SELECT stop_id FROM stops WHERE stop_id LIKE ? LIMIT 1", (f"{gtfs_stop_id}%",))
+	row = cursor.fetchone()
+	return row["stop_id"] if row else None
+
+
 @app.get("/chatbot/response")
-async def get_chatbot_response(stop_name: str, train: str, direction: int):
+async def get_chatbot_response(
+	stop_name: str,
+	train: str,
+	direction: int,
+	stop_id: str | None = None,
+	message: str | None = None,
+):
 	current_delay = 0
 	train_data = None
 	stop_data = None
-	
+	direction_id = int(direction)
+
 	try:
-		cursor = get_connection().cursor()
+		conn = get_connection()
+		cursor = conn.cursor()
 
-		# Get current delay
-		cursor.execute(
-			"""
-			SELECT delay_seconds, actual_arrival_time
-			FROM train_observations
-			WHERE stop_id = (
-				SELECT stop_id FROM stops WHERE stop_name = ?
+		# Resolve GTFS stop_id → actual DB stop_id
+		db_stop_id = _resolve_db_stop_id(cursor, stop_id, train, direction_id) if stop_id else None
+		logger.debug("chatbot stop resolution: gtfs=%s → db=%s (train=%s dir=%s)", stop_id, db_stop_id, train, direction_id)
+
+		# Build stop_id filter — prefer resolved ID, fall back to name lookup
+		if db_stop_id:
+			stop_id_filter = db_stop_id
+		else:
+			cursor.execute("SELECT stop_id FROM stops WHERE stop_name = ? LIMIT 1", (stop_name,))
+			row = cursor.fetchone()
+			stop_id_filter = row["stop_id"] if row else None
+
+		# Most recent delay at this stop
+		if stop_id_filter:
+			cursor.execute(
+				"""
+				SELECT o.delay_seconds, o.actual_arrival_time
+				FROM train_observations o
+				LEFT JOIN trip_statistics t ON t.trip_id = o.trip_id
+				WHERE o.stop_id = ?
+				  AND o.route_id = ?
+				ORDER BY o.timestamp DESC
+				LIMIT 1
+				""",
+				(stop_id_filter, train),
 			)
-			  AND route_id = ?
-			  AND direction_id = ?
-			ORDER BY timestamp DESC
-			LIMIT 1
-			""",
-			(stop_name, train, direction),
-		)
-		delay_result = cursor.fetchone()
-		if delay_result:
-			current_delay = delay_result["delay_seconds"]
+			delay_result = cursor.fetchone()
+			if delay_result:
+				current_delay = delay_result["delay_seconds"]
 
-		# Get all stops data (scheduled + observed)
+		# Historical observations at this stop — last 7 days, up to 20 rows
+		hist_cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
+
+		if stop_id_filter:
+			cursor.execute(
+				"""
+				SELECT o.stop_id, o.delay_seconds, o.actual_arrival_time, o.timestamp
+				FROM train_observations o
+				WHERE o.route_id = ?
+				  AND o.stop_id = ?
+				  AND o.timestamp >= ?
+				ORDER BY o.timestamp DESC
+				LIMIT 20
+				""",
+				(train, stop_id_filter, hist_cutoff),
+			)
+		else:
+			cursor.execute("SELECT NULL LIMIT 0")
+		recent_stop_obs = [dict(row) for row in cursor.fetchall()]
+
+		# Route-level aggregate stats (7-day window)
 		cursor.execute(
 			"""
-			SELECT 
-				stop_id,
-				stop_sequence,
-				'scheduled' AS data_type,
-				NULL AS delay_seconds,
-				NULL AS actual_arrival_time,
-				NULL AS timestamp
-			FROM train_timetable
-			WHERE route_id = ?
-			  AND direction_id = ?
-			
-			UNION
-			
-			SELECT 
-				o.stop_id,
-				NULL AS stop_sequence,
-				'observed' AS data_type,
-				o.delay_seconds,
-				o.actual_arrival_time,
-				o.timestamp
+			SELECT
+				AVG(o.delay_seconds)  AS avg_delay_seconds,
+				MAX(o.delay_seconds)  AS max_delay_seconds,
+				COUNT(*)              AS observation_count
 			FROM train_observations o
 			WHERE o.route_id = ?
-			  AND o.direction_id = ?
-			
-			ORDER BY stop_id, data_type DESC
+			  AND o.timestamp >= ?
+			  AND o.delay_seconds IS NOT NULL
 			""",
-			(train, direction, train, direction),
+			(train, hist_cutoff),
 		)
-		train_data = [dict(row) for row in cursor.fetchall()]
+		route_summary_row = cursor.fetchone()
+		train_data = {
+			"stop_id_used": stop_id_filter,
+			"recent_stop_observations": recent_stop_obs,
+			"route_summary_last_7d": dict(route_summary_row) if route_summary_row else {},
+		}
 
-		# Get stop location info
-		cursor.execute(
-			"""
-			SELECT stop_id, stop_name, latitude, longitude
-			FROM stops
-			WHERE stop_name = ?
-			""",
-			(stop_name,),
-		)
+		# Stop location info
+		if stop_id_filter:
+			cursor.execute(
+				"SELECT stop_id, stop_name, latitude, longitude FROM stops WHERE stop_id = ?",
+				(stop_id_filter,),
+			)
+		else:
+			cursor.execute(
+				"SELECT stop_id, stop_name, latitude, longitude FROM stops WHERE stop_name = ? LIMIT 1",
+				(stop_name,),
+			)
 		stop_result = cursor.fetchone()
 		if stop_result:
 			stop_data = dict(stop_result)
 
 	except Exception as e:
+		logger.exception("chatbot DB query failed: %s", e)
 		current_delay = 0
 		train_data = []
 		stop_data = None
 	finally:
-		cursor.close()
+		try:
+			cursor.close()
+			conn.close()
+		except Exception:
+			pass
 
 	chatbot = Chatbot()
-	response = await chatbot.get_response(stop_name, direction, train, current_delay, train_data, stop_data)
+	response = chatbot.get_response(stop_name, train, current_delay, train_data, stop_data, message)
 	return response
 
 @app.get("/chatbot/view_train_observations")

@@ -1,39 +1,94 @@
-import React, { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-export default function PredictionDisplay({ selectedLine, station1, station2 }) {
+import { apiGet } from "../utils/api";
+
+export default function PredictionDisplay({ selectedLine, station1, station2, direction, stations }) {
   const [prediction, setPrediction] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const fromStation = useMemo(
+    () => stations.find((station) => station["GTFS Stop ID"] === station1),
+    [stations, station1],
+  );
+  const toStation = useMemo(
+    () => stations.find((station) => station["GTFS Stop ID"] === station2),
+    [stations, station2],
+  );
 
   useEffect(() => {
-    const fetchPrediction = () => {
-      if (selectedLine && station1 && station2) {
-        console.log("Fetching predictions for", selectedLine, station1, station2);
-        // Dummy prediction logic (TODO: fetch from real API)
-        const dummyDelay = Math.floor(Math.random() * 15);
-        setPrediction({
-          delay: dummyDelay,
-          timestamp: new Date().toLocaleTimeString(),
-        });
+    let cancelled = false;
+
+    async function fetchPrediction() {
+      if (selectedLine && fromStation && toStation && direction) {
+        setLoading(true);
+        setError("");
+
+        try {
+          const payload = await apiGet("/delays/estimate", {
+            line: selectedLine,
+            from_stop_id: fromStation["GTFS Stop ID"],
+            to_stop_id: toStation["GTFS Stop ID"],
+            direction: direction === "south" ? "southbound" : "northbound",
+          });
+
+          if (!cancelled) {
+            setPrediction({
+              delay: payload.segment_average_delay_seconds,
+              stopCount: payload.stop_count,
+              timestamp: new Date().toLocaleTimeString(),
+            });
+          }
+        } catch (error) {
+          if (!cancelled) {
+            setPrediction(null);
+            setError(error.message);
+          }
+        } finally {
+          if (!cancelled) {
+            setLoading(false);
+          }
+        }
       } else {
         setPrediction(null);
+        setError("");
       }
-    };
+    }
 
-    fetchPrediction(); // Initial call
+    fetchPrediction();
     const interval = setInterval(fetchPrediction, 30000);
-    return () => clearInterval(interval);
-  }, [selectedLine, station1, station2]);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [selectedLine, fromStation, toStation, direction]);
 
-  if (!prediction) return null;
+  if (!selectedLine || !station1 || !station2) {
+    return (
+      <section className="prediction-display">
+        <h2>Live Delay</h2>
+        <p className="prediction-placeholder">Pick a line and two stations to see the current MTA delay estimate.</p>
+      </section>
+    );
+  }
 
   return (
     <section className="prediction-display">
-      <h2>Current Prediction</h2>
+      <h2>Live Delay</h2>
       <p>
-        Estimated Delay for <strong>{selectedLine}</strong> line
-        between <strong>{station1}</strong> and <strong>{station2}</strong>:
+        Estimated delay for <strong>{selectedLine}</strong> between <strong>{fromStation?.["Stop Name"] || station1}</strong> and <strong>{toStation?.["Stop Name"] || station2}</strong>.
       </p>
-      <div className="delay-value">{prediction.delay} minutes</div>
-      <p className="timestamp">Last updated: {prediction.timestamp}</p>
+
+      {loading ? <div className="delay-value">Loading...</div> : null}
+      {!loading && prediction ? (
+        <>
+          <div className="delay-value">
+            {prediction.delay == null ? "No estimate" : `${(prediction.delay / 60).toFixed(1)} min`}
+          </div>
+          <p className="timestamp">{prediction.stopCount} stops sampled · Updated {prediction.timestamp}</p>
+        </>
+      ) : null}
+      {error ? <p className="inline-error">{error}</p> : null}
     </section>
   );
 }
