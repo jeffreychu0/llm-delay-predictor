@@ -1,7 +1,7 @@
 import api.mta_api
 import concurrent.futures
 import time
-from db.init_db import init_db
+from db.init_db import init_db, view_all_made_stops, view_static_timetable_for_all
 from db.gtfs_static_loader import GtfsStaticLoader
 from db.static_extractor import static_to_db
 
@@ -10,16 +10,24 @@ POLL_INTERVAL_SECONDS = 30
 
 
 def main():
-    chatbot = Chatbot()
-    print(chatbot.get_response("Times Square", 0, "1", 120, {}, {}))
     init_db()
+    view_all_made_stops()
+    view_static_timetable_for_all()
+
     static_loader = GtfsStaticLoader()
+    
 
     # Wait for DB initialization before starting static loads.
     time.sleep(2)
     static_summary = static_loader.execute(include_events=True)
     static_to_db()
 
+    
+
+    time.sleep(15)
+    view_all_made_stops()
+    view_static_timetable_for_all()
+ 
     print(f"GTFS static entities loaded: {static_summary}")
     print("Static DB Formed")
 

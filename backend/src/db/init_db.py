@@ -111,6 +111,7 @@ def init_db():
     
     conn.commit()
     conn.close()
+    
 
 
 
@@ -276,7 +277,8 @@ def view_train_timetable(route_id, direction_id, time):
 def view_all_stops_from_route(route_id):
     conn = sqlite3.connect(DB_PATH + '/mta.db')
     cursor = conn.cursor()
-    cursor.execute('SELECT DISTINCT (stop_id) FROM route_to_stop UNION SELECT DISTINCT (stop_id) FROM train_timetable WHERE route_id = ?', (route_id,))
+    cursor.execute('CREATE VIEW IF NOT EXISTS all_stops_from_route_view AS SELECT DISTINCT (stop_id) FROM route_to_stop UNION SELECT DISTINCT (stop_id) FROM train_timetable WHERE route_id = ?', (route_id,))
+    cursor.execute('SELECT * FROM all_stops_from_route_view')
     rows = cursor.fetchall()
     conn.close()
     return rows
@@ -284,7 +286,31 @@ def view_all_stops_from_route(route_id):
 def view_static_timetable_for_stop(stop_id):
     conn = sqlite3.connect(DB_PATH + '/mta.db')
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM train_timetable WHERE stop_id = ? LIMIT 10', (stop_id,))
+    cursor.execute('CREATE VIEW IF NOT EXISTS static_timetable_view AS SELECT * FROM train_timetable WHERE stop_id = ? LIMIT 10', (stop_id,))
+    cursor.execute('SELECT * FROM static_timetable_view')
     rows = cursor.fetchall()
     conn.close()
     return rows
+
+def view_all_train_timetable(route_id, direction_id, time):
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    cursor.execute('CREATE VIEW IF NOT EXISTS train_all_timetable_view AS SELECT * FROM train_timetable;')
+    cursor.execute('SELECT * FROM train_all_timetable_view;')
+    rows = cursor.fetchall()
+    conn.close()
+  
+
+def view_static_timetable_for_all():
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    cursor.execute('CREATE VIEW IF NOT EXISTS static_timetable_view AS SELECT * FROM train_timetable')
+
+    conn.close()
+
+
+def view_all_made_stops():
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    cursor.execute('CREATE VIEW IF NOT EXISTS all_made_stops_view AS SELECT DISTINCT (stop_id) FROM route_to_stop UNION SELECT DISTINCT (stop_id) FROM train_timetable;')
+    conn.close()
