@@ -1,7 +1,7 @@
 import api.mta_api
 import concurrent.futures
 import time
-from db.init_db import init_db, view_all_made_stops, view_static_timetable_for_all
+from db.init_db import *
 from db.gtfs_static_loader import GtfsStaticLoader
 from db.static_extractor import static_to_db
 
@@ -11,8 +11,7 @@ POLL_INTERVAL_SECONDS = 30
 
 def main():
     init_db()
-    view_all_made_stops()
-    view_static_timetable_for_all()
+
 
     static_loader = GtfsStaticLoader()
     
@@ -24,7 +23,7 @@ def main():
 
     
 
-    time.sleep(15)
+    time.sleep(2)
     view_all_made_stops()
     view_static_timetable_for_all()
  
