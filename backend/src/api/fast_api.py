@@ -6,8 +6,8 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from matplotlib.pyplot import streamplot
 
-from backend.src.chatbot import Chatbot
-from db.init_db import DB_PATH, view_train_timetable, view_all_stops_from_route, view_static_timetable_for_stop
+from chatbot import Chatbot
+from db.init_db import DB_PATH
 
 
 logger = logging.getLogger(__name__)
