@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useStations } from "../utils/useStations";
 import TrainMap from "../components/TrainMap";
 import SelectionInterface from "../components/SelectionInterface";
@@ -11,6 +11,8 @@ export default function App() {
     selectedLine: "",
     station1: "",
     station2: "",
+    station1Name: "",
+    station2Name: "",
     filteredStations: [],
   });
 
@@ -35,13 +37,15 @@ export default function App() {
               selectedLine={selection.selectedLine}
               station1={selection.station1}
               station2={selection.station2}
+              direction={selection.direction}
+              stations={selection.filteredStations}
             />
           </div>
           <TrainMap
             stations={selection.filteredStations}
             selectedLine={selection.selectedLine}
-            station1={selection.station1}
-            station2={selection.station2}
+            station1={selection.station1Name}
+            station2={selection.station2Name}
           />
         </div>
       </main>
