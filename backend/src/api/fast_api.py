@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.src.chatbot import Chatbot
 from db.init_db import DB_PATH
 
 
@@ -347,6 +348,90 @@ def get_average_delays_across_all_stations(min_observations: int = Query(default
 		"stations": rows,
 	}
 
+@app.get("/chatbot/response")
+async def get_chatbot_response(stop_name: str, train: str, direction: int):
+	current_delay = 0
+	train_data = None
+	stop_data = None
+	
+	try:
+		cursor = get_connection().cursor()
+
+		# Get current delay
+		cursor.execute(
+			"""
+			SELECT delay_seconds, actual_arrival_time
+			FROM train_observations
+			WHERE stop_id = (
+				SELECT stop_id FROM stops WHERE stop_name = ?
+			)
+			  AND route_id = ?
+			  AND direction_id = ?
+			ORDER BY timestamp DESC
+			LIMIT 1
+			""",
+			(stop_name, train, direction),
+		)
+		delay_result = cursor.fetchone()
+		if delay_result:
+			current_delay = delay_result["delay_seconds"]
+
+		# Get all stops data (scheduled + observed)
+		cursor.execute(
+			"""
+			SELECT 
+				stop_id,
+				stop_sequence,
+				'scheduled' AS data_type,
+				NULL AS delay_seconds,
+				NULL AS actual_arrival_time,
+				NULL AS timestamp
+			FROM train_timetable
+			WHERE route_id = ?
+			  AND direction_id = ?
+			
+			UNION
+			
+			SELECT 
+				o.stop_id,
+				NULL AS stop_sequence,
+				'observed' AS data_type,
+				o.delay_seconds,
+				o.actual_arrival_time,
+				o.timestamp
+			FROM train_observations o
+			WHERE o.route_id = ?
+			  AND o.direction_id = ?
+			
+			ORDER BY stop_id, data_type DESC
+			""",
+			(train, direction, train, direction),
+		)
+		train_data = [dict(row) for row in cursor.fetchall()]
+
+		# Get stop location info
+		cursor.execute(
+			"""
+			SELECT stop_id, stop_name, latitude, longitude
+			FROM stops
+			WHERE stop_name = ?
+			""",
+			(stop_name,),
+		)
+		stop_result = cursor.fetchone()
+		if stop_result:
+			stop_data = dict(stop_result)
+
+	except Exception as e:
+		current_delay = 0
+		train_data = []
+		stop_data = None
+	finally:
+		cursor.close()
+
+	chatbot = Chatbot()
+	response = await chatbot.get_response(stop_name, direction, train, current_delay, train_data, stop_data)
+	return response
 
 if __name__ == "__main__":
 	import uvicorn
