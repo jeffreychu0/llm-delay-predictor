@@ -5,7 +5,9 @@ import { filterStationsByLine } from "../utils/csvParser";
 export default function SelectionInterface({
   stations,
   lines,
-  onSelectionChange
+  onSelectionChange,
+  showDirection = true,
+  showToStation = true,
 }) {
   const [selectedLine, setSelectedLine] = useState("");
   const [direction, setDirection] = useState("north");
@@ -16,7 +18,7 @@ export default function SelectionInterface({
     return filterStationsByLine(stations, selectedLine);
   }, [stations, selectedLine]);
   // Get representative labels for the selected station
-  const selectedStationObj = filteredStations.find(s => s["Stop Name"] === station1);
+  const selectedStationObj = filteredStations.find((s) => s["GTFS Stop ID"] === station1);
   const northLabel = selectedStationObj ? selectedStationObj["North Direction Label"] : "Northbound";
   const southLabel = selectedStationObj ? selectedStationObj["South Direction Label"] : "Southbound";
 
@@ -33,9 +35,11 @@ export default function SelectionInterface({
       direction,
       station1,
       station2,
+      station1Name: selectedStationObj ? selectedStationObj["Stop Name"] : "",
+      station2Name: filteredStations.find((s) => s["GTFS Stop ID"] === station2)?.["Stop Name"] || "",
       filteredStations
     });
-  }, [selectedLine, direction, station1, station2, filteredStations, onSelectionChange]);
+  }, [selectedLine, direction, station1, station2, filteredStations, selectedStationObj, onSelectionChange]);
 
   return (
     <section className="selection-interface">
@@ -72,50 +76,54 @@ export default function SelectionInterface({
           {filteredStations.map((s, index) => (
             <option
               key={`${s["GTFS Stop ID"]}-1-${index}`}
-              value={s["Stop Name"]}
+              value={s["GTFS Stop ID"]}
             >
-              {s["Stop Name"]}
+              {s["Stop Name"]} ({s["GTFS Stop ID"]})
             </option>
           ))}
         </select>
       </div>
 
-      <div className="input-group">
-        <label htmlFor="direction">Direction:</label>
-        <select
-          id="direction"
-          value={direction}
-          onChange={(e) => setDirection(e.target.value)}
-          disabled={!selectedLine || !station1}
-        >
-          {northLabel !== "Last Stop" && (
-            <option value="north">Northbound ({northLabel})</option>
-          )}
-          {southLabel !== "Last Stop" && (
-            <option value="south">Southbound ({southLabel})</option>
-          )}
-        </select>
-      </div>
+      {showDirection && (
+        <div className="input-group">
+          <label htmlFor="direction">Direction:</label>
+          <select
+            id="direction"
+            value={direction}
+            onChange={(e) => setDirection(e.target.value)}
+            disabled={!selectedLine || !station1}
+          >
+            {northLabel !== "Last Stop" && (
+              <option value="north">Northbound ({northLabel})</option>
+            )}
+            {southLabel !== "Last Stop" && (
+              <option value="south">Southbound ({southLabel})</option>
+            )}
+          </select>
+        </div>
+      )}
 
-      <div className="input-group">
-        <label htmlFor="station2">To Station:</label>
-        <select
-          id="station2"
-          value={station2}
-          onChange={(e) => setStation2(e.target.value)}
-          disabled={!selectedLine || !station1}
-        >
-          <option value="">-- Select station --</option>
-          {filteredStations.map((s, index) => (
-            <option
-              key={`${s["GTFS Stop ID"]}-2-${index}`}
-              value={s["Stop Name"]}
-            >
-              {s["Stop Name"]}
-            </option>
-          ))}
-        </select>
-      </div>
+      {showToStation && (
+        <div className="input-group">
+          <label htmlFor="station2">To Station:</label>
+          <select
+            id="station2"
+            value={station2}
+            onChange={(e) => setStation2(e.target.value)}
+            disabled={!selectedLine || !station1}
+          >
+            <option value="">-- Select station --</option>
+            {filteredStations.map((s, index) => (
+              <option
+                key={`${s["GTFS Stop ID"]}-2-${index}`}
+                value={s["GTFS Stop ID"]}
+              >
+                {s["Stop Name"]} ({s["GTFS Stop ID"]})
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
     </section>
   );
 }

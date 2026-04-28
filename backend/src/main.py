@@ -10,8 +10,6 @@ POLL_INTERVAL_SECONDS = 30
 
 
 def main():
-    chatbot = Chatbot()
-    print(chatbot.get_response("Times Square", 0, "1", 120, {}, {}))
     init_db()
     static_loader = GtfsStaticLoader()
 

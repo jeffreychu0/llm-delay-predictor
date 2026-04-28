@@ -23,8 +23,8 @@ function ChangeView({ center, zoom }) {
 }
 
 export default function TrainMap({ stations, selectedLine, station1, station2 }) {
-  const s1Obj = stations.find((s) => s["Stop Name"] === station1);
-  const s2Obj = stations.find((s) => s["Stop Name"] === station2);
+  const s1Obj = stations.find((s) => s["Stop Name"] === station1 || s["GTFS Stop ID"] === station1);
+  const s2Obj = stations.find((s) => s["Stop Name"] === station2 || s["GTFS Stop ID"] === station2);
 
   const center = [40.7128, -74.0060]; // NYC Center
 
