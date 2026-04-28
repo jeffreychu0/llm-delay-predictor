@@ -4,15 +4,16 @@ import os
 file = os.path.abspath(__file__)
 # static var to ensure when connecting to the db the path is correct regardless of where the script is being run from, this is important for the feed processing function which is being executed in a different thread and may have a different working directory
 DB_PATH = os.path.dirname(file) 
-def init_db():
+def init_db(reset=False):
     conn = sqlite3.connect(DB_PATH + '/mta.db')
     cursor = conn.cursor()
 
-    # Route-to-stop is a derived convenience table and safe to recreate when schema changes.
-    cursor.execute('DROP TABLE IF EXISTS route_to_stop')
-    cursor.execute('DROP TABLE IF EXISTS train_observations')
-    cursor.execute('DROP TABLE IF EXISTS observation_diagnostics')
-    cursor.execute('DROP TABLE IF EXISTS trip_statistics')
+    if reset:
+        # Explicit destructive reset path.
+        cursor.execute('DROP TABLE IF EXISTS route_to_stop')
+        cursor.execute('DROP TABLE IF EXISTS train_observations')
+        cursor.execute('DROP TABLE IF EXISTS observation_diagnostics')
+        cursor.execute('DROP TABLE IF EXISTS trip_statistics')
     
 
     """
