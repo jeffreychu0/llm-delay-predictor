@@ -211,13 +211,13 @@ export default function StatsPage() {
     };
   }, [selection.selectedLine, selection.direction, selectedStation, secondaryStation]);
 
-  const lineDelayBars = (lineSummary?.per_line || []).slice(0, 12).map((entry) => ({
+  const lineDelayBars = (lineSummary?.per_line || []).map((entry) => ({
     label: entry.route_id,
     value: entry.average_delay_seconds ?? 0,
     meta: `${entry.observation_count} obs`,
   }));
 
-  const stationDelayBars = stationAverages.slice(0, 12).map((entry) => ({
+  const stationDelayBars = stationAverages.slice(0, 29).map((entry) => ({
     label: entry.stop_name || entry.stop_id,
     value: entry.average_delay_seconds ?? 0,
     meta: `${entry.observation_count} obs`,
@@ -228,14 +228,6 @@ export default function StatsPage() {
 
   return (
     <div className="page page--stats">
-      <section className="page-hero">
-        <div>
-          <p className="eyebrow">Page 3</p>
-          <h1>Delay Statistics</h1>
-          <p className="page-lede">A minimalist data room for the database, with charts and the live API endpoints.</p>
-        </div>
-        <div className="hero-chip">mta.db</div>
-      </section>
 
       {loadingData ? <div className="panel panel--loading">Loading analytics...</div> : null}
       {dataError ? <div className="panel panel--error">{dataError}</div> : null}
@@ -286,21 +278,7 @@ export default function StatsPage() {
         />
       </div>
 
-      <div className="stats-grid stats-grid--two">
-        <section className="panel">
-          <div className="panel-heading">
-            <h2>Headsigns</h2>
-            <p>{selection.selectedLine ? `Headsigns found for ${selection.selectedLine}.` : "Pick a line to inspect headsigns."}</p>
-          </div>
-          <div className="mini-list">
-            {headsigns.length ? headsigns.slice(0, 10).map((item) => (
-              <div className="mini-list__item" key={`${item.route_id}-${item.headsign}`}>
-                <strong>{item.headsign}</strong>
-                <span>{item.samples} samples</span>
-              </div>
-            )) : <p className="panel-empty">No headsign data available for the chosen line.</p>}
-          </div>
-        </section>
+      <div className="stats-grid stats-grid--one">
 
         <section className="panel">
           <div className="panel-heading">
@@ -315,43 +293,6 @@ export default function StatsPage() {
               </div>
             ))) : <p className="panel-empty">No live train samples for this route yet.</p>}
           </div>
-        </section>
-      </div>
-
-      <div className="stats-grid stats-grid--two">
-        <section className="panel">
-          <div className="panel-heading">
-            <h2>Station detail</h2>
-            <p>{selectedStation ? `Observations for ${selectedStation["Stop Name"]}.` : "Pick a station to review its observations."}</p>
-          </div>
-          <div className="table-list">
-            {(stationLive?.observations || []).slice(0, 8).length ? (stationLive.observations.slice(0, 8).map((row) => (
-              <div className="table-list__row" key={`${row.trip_id}-${row.timestamp}`}>
-                <strong>{row.route_id}</strong>
-                <span>{row.delay_seconds == null ? "No delay" : `${(row.delay_seconds / 60).toFixed(1)} min`}</span>
-              </div>
-            ))) : <p className="panel-empty">No station observations available yet.</p>}
-          </div>
-        </section>
-
-        <section className="panel">
-          <div className="panel-heading">
-            <h2>Segment estimate</h2>
-            <p>{selection.station1Name && selection.station2Name ? `${selection.station1Name} to ${selection.station2Name}` : "Choose two stops to estimate delay across the segment."}</p>
-          </div>
-          {segmentEstimate && !segmentEstimate.error ? (
-            <div className="segment-summary">
-              <strong>
-                {segmentEstimate.segment_average_delay_seconds == null
-                  ? "No estimate"
-                  : `${(segmentEstimate.segment_average_delay_seconds / 60).toFixed(1)} min`}
-              </strong>
-              <p>{segmentEstimate.direction}</p>
-              <span>{segmentEstimate.stop_count} stops analyzed</span>
-            </div>
-          ) : (
-            <p className="panel-empty">{segmentEstimate?.error || "No segment estimate yet."}</p>
-          )}
         </section>
       </div>
     </div>

@@ -81,15 +81,6 @@ export default function ChatPage() {
 
   return (
     <div className="page page--chat">
-      <section className="page-hero">
-        <div>
-          <p className="eyebrow">Page 1</p>
-          <h1>MTA Chat</h1>
-          <p className="page-lede">Ask a plain-language question and get a delay-aware response from the API.</p>
-        </div>
-        <div className="hero-chip">/chatbot/response</div>
-      </section>
-
       <div className="page-grid page-grid--chat">
         <section className="panel panel--stacked">
           <SelectionInterface
@@ -135,8 +126,6 @@ export default function ChatPage() {
 
         <section className="panel chat-panel">
           <div className="panel-heading">
-            <h2>Conversation</h2>
-            <p>Minimal, delayed by the data source, and built for quick rider questions.</p>
           </div>
 
           <div className="chat-thread">
@@ -146,12 +135,6 @@ export default function ChatPage() {
               </MessageBubble>
             ))}
           </div>
-
-          {selectedStation ? (
-            <div className="chat-footnote">
-              The chatbot is currently anchored to <strong>{selectedStation["Stop Name"]}</strong> on the <strong>{selection.selectedLine}</strong> line.
-            </div>
-          ) : null}
         </section>
       </div>
     </div>
