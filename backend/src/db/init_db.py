@@ -264,3 +264,27 @@ def bulk_refresh_train_timetable(entries, chunk_size=10000):
     conn.commit()
     conn.close()
     
+def view_train_timetable(route_id, direction_id, time):
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    cursor.execute('CREATE VIEW IF NOT EXISTS train_timetable_view AS SELECT * FROM train_timetable WHERE route_id = ? AND direction_id = ? AND arrival_time >= ?', (route_id, direction_id, time))
+    cursor.execute('SELECT * FROM train_timetable_view LIMIT 10')
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+def view_all_stops_from_route(route_id):
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT DISTINCT (stop_id) FROM route_to_stop UNION SELECT DISTINCT (stop_id) FROM train_timetable WHERE route_id = ?', (route_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+def view_static_timetable_for_stop(stop_id):
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM train_timetable WHERE stop_id = ? LIMIT 10', (stop_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return rows

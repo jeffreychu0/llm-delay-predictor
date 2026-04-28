@@ -3,9 +3,10 @@ from datetime import datetime, timedelta
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from matplotlib.pyplot import streamplot
 
 from backend.src.chatbot import Chatbot
-from db.init_db import DB_PATH
+from db.init_db import DB_PATH, view_train_timetable, view_all_stops_from_route, view_static_timetable_for_stop
 
 
 app = FastAPI(
@@ -432,6 +433,21 @@ async def get_chatbot_response(stop_name: str, train: str, direction: int):
 	chatbot = Chatbot()
 	response = await chatbot.get_response(stop_name, direction, train, current_delay, train_data, stop_data)
 	return response
+
+@app.get("/chatbot/view_train_observations")
+async def view_train(line: str, direction: int, time):
+	data = await view_train_timetable(line, direction, time)
+	return data
+
+@app.get("/chatbot/view_stops_for_route")
+async def view_stops_for_route(line: str, direction: int):
+	data = await view_all_stops_from_route(line, direction)
+	return data
+
+@app.get("/chatbot/view_stop_timetable")
+async def view_stop_timetable(stop_id: str):
+	data = await view_static_timetable_for_stop(stop_id)
+	return data
 
 if __name__ == "__main__":
 	import uvicorn
