@@ -5,11 +5,13 @@ from db.init_db import init_db
 from db.gtfs_static_loader import GtfsStaticLoader
 from db.static_extractor import static_to_db
 
-
+from chatbot import Chatbot
 POLL_INTERVAL_SECONDS = 30
 
 
 def main():
+    chatbot = Chatbot()
+    print(chatbot.get_response("Times Square", 0, "1", 120, {}, {}))
     init_db()
     static_loader = GtfsStaticLoader()
 
