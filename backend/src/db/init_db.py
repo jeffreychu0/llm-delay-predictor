@@ -289,7 +289,7 @@ def view_all_stops_from_route(route_id):
 def view_static_timetable_for_stop(stop_id):
     conn = sqlite3.connect(DB_PATH + '/mta.db')
     cursor = conn.cursor()
-    cursor.execute('CREATE VIEW IF NOT EXISTS static_timetable_view AS SELECT * FROM train_timetable;')
+    cursor.execute(';CREATE VIEW IF NOT EXISTS static_timetable_view AS SELECT * FROM train_timetable')
     cursor.execute('SELECT * FROM static_timetable_view where stop_id = ? LIMIT 10;', (stop_id,))
     rows = cursor.fetchall()
     cursor.execute('DROP VIEW IF EXISTS static_timetable_view;')
