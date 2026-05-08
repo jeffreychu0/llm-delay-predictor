@@ -168,6 +168,109 @@ WHERE trip_id = ? AND stop_id = ?
 ORDER BY stop_sequence
 LIMIT 1;
 
+SELECT route_id, headsign,
+COUNT(*) AS samples
+FROM train_timetable
+WHERE route_id = ?
+AND headsign IS NOT NULL
+AND TRIM(headsign) <> ''
+GROUP BY route_id, headsign
+ORDER BY route_id, samples DESC, headsign;
+
+
+WITH latest_per_trip AS (
+SELECT trip_id,
+MAX(timestamp) AS latest_timestamp
+FROM train_observations
+WHERE route_id = ?
+AND timestamp >= ?
+GROUP BY trip_id
+)
+SELECT o.trip_id,
+o.route_id,
+o.stop_id,
+s.stop_name,
+o.delay_seconds,
+o.actual_arrival_time,
+o.timestamp
+FROM latest_per_trip l
+JOIN train_observations o
+ON o.trip_id = l.trip_id
+AND o.timestamp = l.latest_timestamp
+LEFT JOIN stops s
+ON s.stop_id = o.stop_id
+ORDER BY o.timestamp DESC;
+-- delay estimate
+SELECT stop_id, stop_sequence
+FROM route_to_stop
+WHERE route_id = ?
+ AND direction_id = ? AND stop_sequence IS NOT NULL
+ORDER BY stop_sequence;
+
+SELECT o.delay_seconds, o.actual_arrival_time
+FROM train_observations o
+LEFT JOIN trip_statistics t ON t.trip_id = o.trip_id
+WHERE o.stop_id = ?
+    AND o.route_id = ?
+ORDER BY o.timestamp DESC
+LIMIT 1; 
+
+SELECT o.stop_id, o.delay_seconds, o.actual_arrival_time, o.timestamp
+FROM train_observations o
+WHERE o.route_id = ?
+    AND o.stop_id = ?
+    AND o.timestamp >= ?
+ORDER BY o.timestamp DESC
+LIMIT 20;
+
+SELECT
+    AVG(o.delay_seconds)  AS avg_delay_seconds,
+    MAX(o.delay_seconds)  AS max_delay_seconds,
+    COUNT(*)              AS observation_count
+FROM train_observations o
+WHERE o.route_id = ?
+    AND o.timestamp >= ?
+    AND o.delay_seconds IS NOT NULL;
+-- station delay
+SELECT stop_id,
+        stop_name,
+        latitude,
+        longitude
+FROM stops
+WHERE stop_id = ?;
+--stop name finder
+SELECT stop_name FROM stops WHERE stop_id = ? LIMIT 1;
+SELECT stop_id FROM stops WHERE stop_name = ?;
+
+-- averages
+SELECT AVG(delay_seconds) AS global_average_delay_seconds,
+COUNT(*) AS observation_count
+FROM train_observations
+WHERE delay_seconds IS NOT NULL;
+
+SELECT route_id,
+AVG(delay_seconds) AS average_delay_seconds,
+COUNT(*) AS observation_count
+FROM train_observations
+WHERE delay_seconds IS NOT NULL
+GROUP BY route_id
+ORDER BY route_id;
+
+SELECT r.stop_id,
+r.stop_sequence,
+AVG(o.delay_seconds) AS average_delay_seconds,
+COUNT(o.observation_id) AS observation_count
+FROM route_to_stop r
+LEFT JOIN train_observations o
+ON o.route_id = r.route_id
+AND o.stop_id = r.stop_id
+AND o.delay_seconds IS NOT NULL
+WHERE r.route_id = ?
+AND r.direction_id = ?
+AND r.stop_sequence BETWEEN ? AND ?
+GROUP BY r.stop_id, r.stop_sequence
+ORDER BY r.stop_sequence;
+
 SELECT start_time FROM trip_statistics WHERE trip_id = ? LIMIT 1;
 
 -- Timetable views and helper queries
@@ -191,8 +294,6 @@ DROP VIEW IF EXISTS static_timetable_view;
 CREATE VIEW IF NOT EXISTS train_all_timetable_view AS SELECT * FROM train_timetable;
 SELECT * FROM train_all_timetable_view;
 DROP VIEW IF EXISTS train_all_timetable_view;
-
-CREATE VIEW IF NOT EXISTS static_timetable_view AS SELECT * FROM train_timetable;
 
 CREATE VIEW IF NOT EXISTS all_made_stops_view AS
   SELECT DISTINCT stop_id FROM route_to_stop
