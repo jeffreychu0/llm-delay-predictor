@@ -112,6 +112,7 @@ def init_db(reset=False):
     
     conn.commit()
     conn.close()
+    
 
 
 
@@ -265,3 +266,57 @@ def bulk_refresh_train_timetable(entries, chunk_size=10000):
     conn.commit()
     conn.close()
     
+def view_train_timetable(route_id, direction_id, time):
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    cursor.execute('CREATE VIEW IF NOT EXISTS train_timetable_view AS SELECT * FROM train_timetable;')
+    cursor.execute('SELECT * FROM train_timetable_view LIMIT 10 WHERE route_id = ? AND direction_id = ? AND arrival_time >= ?; LIMIT 10', (route_id, direction_id, time))
+    rows = cursor.fetchall()
+    cursor.execute('DROP VIEW IF EXISTS train_timetable_view;')
+    conn.close()
+    return rows
+
+def view_all_stops_from_route(route_id):
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    cursor.execute('CREATE VIEW IF NOT EXISTS all_stops_from_route_view AS SELECT DISTINCT (route_id) FROM route_to_stop UNION SELECT DISTINCT (route_id) FROM train_timetable;')
+    cursor.execute('SELECT * FROM all_stops_from_route_view where route_id = ?;', (route_id,))
+    rows = cursor.fetchall()
+    cursor.execute('DROP VIEW IF EXISTS all_stops_from_route_view;')
+    conn.close()
+    return rows
+
+def view_static_timetable_for_stop(stop_id):
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    cursor.execute(';CREATE VIEW IF NOT EXISTS static_timetable_view AS SELECT * FROM train_timetable')
+    cursor.execute('SELECT * FROM static_timetable_view where stop_id = ? LIMIT 10;', (stop_id,))
+    rows = cursor.fetchall()
+    cursor.execute('DROP VIEW IF EXISTS static_timetable_view;')
+    conn.close()
+    return rows
+
+def view_all_train_timetable(route_id, direction_id, time):
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    cursor.execute('CREATE VIEW IF NOT EXISTS train_all_timetable_view AS SELECT * FROM train_timetable;')
+    cursor.execute('SELECT * FROM train_all_timetable_view;')
+    rows = cursor.fetchall()
+    cursor.execute('DROP VIEW IF EXISTS train_all_timetable_view;')
+    conn.close()
+    return rows
+  
+
+def view_static_timetable_for_all():
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    cursor.execute('CREATE VIEW IF NOT EXISTS static_timetable_view AS SELECT * FROM train_timetable;')
+
+    conn.close()
+
+
+def view_all_made_stops():
+    conn = sqlite3.connect(DB_PATH + '/mta.db')
+    cursor = conn.cursor()
+    cursor.execute('CREATE VIEW IF NOT EXISTS all_made_stops_view AS SELECT DISTINCT (stop_id) FROM route_to_stop UNION SELECT DISTINCT (stop_id) FROM train_timetable;')
+    conn.close()
